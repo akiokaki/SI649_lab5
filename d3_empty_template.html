@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Lab-5</title>
+    <script src="https://d3js.org/d3.v4.min.js"></script>
+    <!--optional color scales, you can specify your own color scale-->
+    <script src="https://d3js.org/d3-scale-chromatic.v1.min.js"></script>
+    
+    <script type="text/javascript" src="http://code.jquery.com/jquery-latest.min.js"></script>
+    <!-- <script type="text/javascript" src="lab2_js_data.js"></script> -->
+</head>
+<body>
+
+<script>
+/*
+d3.nest()
+    .key((d) => d.name)
+    .entries(test_data)
+    .map((d) => (
+        {
+            "name": d.key,
+            "salaries":d.values.map((i) => i.salary),
+            "mean_salary": d3.mean(d.values, (i) => i.salary),
+            "values": d.values
+        }))        
+*/ 
+
+/********************************
+***** FUNCTION DEFINITIONS ******
+********************************/
+
+  function setInitial(data) {
+    //chart dimensions
+    w = 800
+    h = 400
+    margin = {top: 20, right: 20, bottom: 130, left: 70}
+    
+    // helps set coordinate 
+    width = w - margin.left - margin.right
+    height = h - margin.top - margin.bottom
+
+    //create blank chart
+    svg = d3.select("body")
+      .append("div")
+        .attr("class", "sample")
+      .append("svg")
+      .attr("width", width + margin.left + margin.right)
+      .attr("height", height + margin.top + margin.bottom)
+      .append("g")
+        .attr("transform", "translate(" + margin.left + "," + margin.top + ")")
+
+    //create info box
+    infobox = d3.select(".sample")
+      .append("div")
+      .style("margin", "1em")
+      .style("background-color", "#ddd")
+      .style("padding", "1em")
+      .style("height", "10em")
+      .style("width", "10em")
+
+
+    //data.forEach((d) => d.value = +d.value)
+    window.data = data
+
+    //create scales
+    x = d3.scaleBand()
+      .range([0,width])
+      .padding(0.1)
+      .domain(data.map((d) => d["Director Name"]))
+    y = d3.scaleLinear()
+      .range([height,10])
+      .domain([0, d3.max(data, (d) => d["Average IMDB Rating"])])
+    z = d3.scaleSequential(d3.interpolateGreens)
+      .domain([0, d3.max(data, (d) => d["Average Production Budget"])])
+    t = d3.transition()
+      .duration(2000)
+  }
+
+/* Dataframe function*/
+
+  function edit_data(data_argument) {
+    data_edit = d3.nest()
+      .key((movie_entry) => movie_entry.Director)
+      .entries(data_argument)
+      .map((movie_entry) => (
+          {
+              "Director Name": movie_entry.key,
+              "Average IMDB Rating": d3.mean(movie_entry.values, (i) => i["IMDB Rating"]),
+              "Average Production Budget": d3.mean(movie_entry.values, (i) => i["Production Budget"]),
+              //"Movie Count": movie_entry.forEach((d) => count += 1),
+              "IMDB_Rating": movie_entry.values.map((i) => i["IMDB Rating"]),
+              "Production_Budget": movie_entry.values.map((i) => i["Production Budget"]),
+              "Movie": movie_entry.values.map((i) => i["Title"])
+              //"values": movie_entry.values
+          }))
+    // Print out the new dataframe
+    console.log(data_edit)
+
+    return data_edit;
+  }
+
+/* Axis functions*/
+
+  // Debug
+  //data_arg: data
+  //x_attribute: "Director Name"
+  //y_attribute: "Average IMDB Rating"
+  //z_attribute: "Average Production Budget"
+  function drawBarsAndXAxis(data_arg, x_attribute, y_attribute, z_attribute) {
+    //update x axis
+    x.domain(data_arg.map((d) => d[x_attribute]))
+    svg.select("g.x_axis")
+        .call(d3.axisBottom(x))
+
+    //x axis of graph
+    svg.append("g")
+      .attr("class", "x_axis")
+      .attr("transform", "translate(0," + height + ")")
+      .call(d3.axisBottom(x))
+      .selectAll("text")	
+        .style("text-anchor", "end")
+        .attr("dx", "-.8em")
+        .attr("dy", ".15em")
+        .attr("transform", "rotate(-65)");
+  
+    //JOIN
+    bars = svg.selectAll("rect.bar")
+      .data(data_arg, (d) => d[x_attribute])
+    console.log(bars)
+
+    //EXIT (elements to be removed)
+    bars.exit()
+      .transition(t)
+        .attr("fill", "red")
+        .attr("width", 0)
+        .remove()
+
+    //UPDATE (elements to be updated)
+    bars
+      .transition(t)
+        .attr("y", (d) => y(d[y_attribute]))
+        .attr("height", (d) => height - y(d[y_attribute]))
+        .attr("x", (d) => x(d[x_attribute]))
+        .attr("width", x.bandwidth())
+
+    //ENTER (elements to be created)
+    bars.enter()
+        .append("rect")
+        .attr("class", "bar")
+        .attr("y", (d) => y(d[y_attribute]))
+        .attr("height", (d) => height - y(d[y_attribute]))
+        .attr("x", (d) => x(d[x_attribute]))
+        .attr("width", 0)
+        .style("fill", (d) => z(d[z_attribute]))
+      .transition(t)
+        //.attr("fill", "green")
+        .attr("width", x.bandwidth())
+
+        //ENTER + UPDATE (all new and existing elements)
+        svg.selectAll("rect.bar")
+          .on("mouseout", (d) => infobox.text("Director: \n Movie Ct: \n Avg. IMDB Rating: \n Avg Production Budget: \n"))
+          .on("mouseover", (d) => infobox.text(d["Director Name"] + "\n" + d["Movie Count"] + "\n" + d["Average IMDB Rating"] + "\n" + d["Average Production Budget"]))
+  }
+
+  function drawYAxis(svg, y) {
+    svg.append("g")
+      .attr("class", "y_axis")
+      .call(d3.axisLeft(y))
+  }
+ 
+  
+  function dropDown() {  
+    $("body").append("<div id='button_append0'><select name='fields' id='fieldSelection'></select></div>")
+    fields = ["Director Name", "Average IMDB Rating", "Average Production Budget", "Movie Count"]
+    for (field of fields) {
+        $("#fieldSelection").append("<option value='" + field + "'>" + field + "</option>")
+    }
+  }
+
+/* Create a button to sort */
+  function sortBars(data_frame){
+    f = $("#fieldSelection").val()
+    console.log(f)
+    data_frame.sort((a, b) => a[f] > b[f] ? -1 : +(a[f] < b[f]))
+    drawBarsAndXAxis(data_frame, "Director Name", "Average IMDB Rating", "Average Production Budget");
+    
+  }
+
+  function dropDownButton(data) {  
+    $("body").append("<div id='button_append1'><select name='fields' id='fieldSelection'></select></div>")
+    data_output = d3.nest()
+      .key((d) => d.name)
+      .entries(data)
+      .map((d) => (
+          {
+            "director": d.key,
+            "Major Genre":d.values.map((i) => i["Major Genre"])
+          })) 
+    for (field of data_output) {
+        $("#fieldSelection").append("<option value='" + field + "'>" + field + "</option>")
+        console.log(field)
+    }
+    
+    // Button
+    $("#button_append1").append("<button onclick='filterGenre()'>Sort Bars</button>")
+
+  }
+  
+  
+/********************************
+************ MAIN ***************
+********************************/
+
+  data = d3.json("movies_lab5.json", function(error,data) {
+    if (error) throw error;
+/*
+    data.forEach(function(d) {
+      d.Worldwide_Gross = +d.Worldwide_Gross;
+      d.US_Gross = +d.US_Gross;
+    });
+*/
+
+// Debug
+/*
+    console.log(data[0]["Production Budget"])
+    edit_data(data)
+    createChart1(edit_data(data));
+*/
+    
+    // Instantiate data frame and set to variable
+    custom_dataFrame = edit_data(data);
+
+    // Set initial values
+    setInitial(custom_dataFrame);
+
+    // Create the bars and the x-axis
+    drawBarsAndXAxis(custom_dataFrame, "Director Name", "Average IMDB Rating", "Average Production Budget");
+
+    //y axis of graph
+    drawYAxis(svg, y);
+    
+    //Adding title
+    svg.append("text")
+      .text("Average IMDB Rating of Each Director")
+
+    // Make Dropdown
+    dropDown();
+
+    // Button: sorts the graph
+    $("#button_append0").append("<button onclick='sortBars(custom_dataFrame)'>Sort Bars</button>")
+    
+    dropDownButton(custom_dataFrame);
+
+  });
+  
+</script>
+</body>
+</html>
